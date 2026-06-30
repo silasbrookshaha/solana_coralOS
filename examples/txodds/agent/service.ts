@@ -1,11 +1,10 @@
 /**
  * TxODDS service — a self-contained reference for selling verified TxLINE World Cup data for SOL.
  *
- * Note: the shipped seller already integrates `txline` *inline* — see `txlineService()` in
- * `coral-agents/seller-agent/src/service.ts`, which calls TxLINE directly (its own `txlineGet`) and
- * adds team names + a deterministic fallback. This module is the standalone, minimal version of the
- * same idea (used by nothing else in the kit); read it to understand the shape, then either fork the
- * seller's inline `txlineService` or wire this in as `case 'txline': return deliverTxOdds(payload)`.
+ * Note: the live demo serves the edge through the proxy (`server/proxy.ts` → `/api/edge`), which shares
+ * the same verified-odds→LLM-call transform via `analyzeEdge()` in `agent/edge.ts`. This module is the
+ * standalone, minimal version of the same idea — the `deliverService()` fork point: read it to
+ * understand the shape, then wire it in as `case 'txline': return deliverTxOdds(payload)`.
  *
  * Request grammar (the buyer's request string after the `txline` keyword):
  *   "fixtures"          -> upcoming World Cup / Int Friendlies fixtures              (data only)
@@ -18,7 +17,7 @@
  *   - LLM      turns raw odds into a sellable insight in the `edge` verb (`complete()` from the kit).
  */
 import { TxLineClient } from './txline.js'
-import { complete } from '@pay/agent-runtime'
+import { analyzeEdge } from './edge.js'
 
 export async function deliverTxOdds(request: string): Promise<string> {
   const tokens = request.trim().split(/\s+/).filter(Boolean)
@@ -52,20 +51,9 @@ export async function deliverTxOdds(request: string): Promise<string> {
       case 'edge': {
         const fixtureId = Number(rest[0])
         if (!fixtureId) return JSON.stringify({ error: 'usage: edge <fixtureId>' })
-        const odds = await client.odds(fixtureId)
-        const analysis = await complete({
-          system:
-            'You are a disciplined football trading analyst. Given de-margined World Cup odds, ' +
-            'state any value edge and a single one-line call. Be concise; never invent data.',
-          user: `Fixture ${fixtureId} odds: ${JSON.stringify(odds).slice(0, 1500)}`,
-          maxTokens: 256,
-        })
-        return JSON.stringify({
-          service: 'txline-edge',
-          fixtureId,
-          analysis,
-          timestamp: new Date().toISOString(),
-        })
+        const [odds, fixtures] = await Promise.all([client.odds(fixtureId), client.fixtures()])
+        const edge = await analyzeEdge({ fixtureId, odds, fixtures }) // shared with the web proxy's /api/edge
+        return JSON.stringify({ service: 'txline-edge', ...edge, timestamp: new Date().toISOString() })
       }
 
       default:

@@ -24,6 +24,8 @@ import nacl from 'tweetnacl'
 import bs58 from 'bs58'
 import { fileURLToPath } from 'node:url'
 import { assertDevnet } from '@pay/agent-runtime'
+import { analyzeEdge } from '../agent/edge.js'
+import { makeProgram, deposit, release, escrowPda } from '../agent/escrow.js'
 
 const PROGRAM = new PublicKey('6pW64gN1s2uqjHkn1unFeEjAwJkPGHoppGvS715wyP2J')
 const MINT = new PublicKey('4Zao8ocPhmMgq7PdsYWyxvqySMGx7xb9cMftPMkEokRG') // real treasury mint
@@ -32,6 +34,19 @@ const RPC = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
 const PORT = Number(process.env.PORT ?? 8801)
 // fileURLToPath (not .pathname) so the repo-root .env resolves on macOS/Linux too, not just Windows.
 const ENV_PATH = process.env.KIT_ENV ?? fileURLToPath(new URL('../../../.env', import.meta.url))
+
+// Pull LLM + seller keys from the repo .env so /api/edge can call the model and /api/settle can pay.
+// (Existing process.env wins, so a shell override still takes precedence.)
+;(function loadEnv() {
+  try {
+    for (const line of fs.readFileSync(ENV_PATH, 'utf8').split('\n')) {
+      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/)
+      if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '')
+    }
+  } catch { /* no .env — rely on the shell env */ }
+})()
+
+const expl = (kind: 'tx' | 'address', id: string) => `https://explorer.solana.com/${kind}/${id}?cluster=devnet`
 
 function buyerKeypair(): Keypair {
   const txt = fs.readFileSync(ENV_PATH, 'utf8')
@@ -90,16 +105,93 @@ async function txGet(path: string): Promise<unknown> {
   return res.data
 }
 
+// A fixture is board-worthy only if it carries a de-margined 1X2 market with at least one real
+// (finite) price — the live feed is full of over/under and Asian-handicap rows priced "NA" that we
+// must NOT surface as if they were odds. This is the single source of truth for "has real odds".
+const usable1x2 = (m: any): boolean =>
+  String(m?.SuperOddsType ?? '').includes('1X2') &&
+  Array.isArray(m?.PriceNames) &&
+  m.PriceNames.some((_: unknown, i: number) => Number.isFinite(Number((m.Pct || [])[i])))
+
+/**
+ * The fixtures to actually show: only those with verified live 1X2 odds, with the odds inlined so the
+ * UI never has to guess or fall back to demo numbers for a live game. Cached briefly + fetched with
+ * bounded concurrency so the board loads fast without hammering the upstream.
+ */
+let boardCache: { at: number; data: any[] | null } = { at: 0, data: null }
+async function board(): Promise<any[]> {
+  if (boardCache.data && Date.now() - boardCache.at < 30_000) return boardCache.data
+  const fixtures = await txGet('/api/fixtures/snapshot')
+  const list = ((Array.isArray(fixtures) ? fixtures : []) as any[]).slice(0, 80)
+  const results: (any | null)[] = new Array(list.length).fill(null)
+  let next = 0
+  async function worker(): Promise<void> {
+    while (next < list.length) {
+      const idx = next++
+      const f = list[idx]
+      try {
+        const odds = await txGet(`/api/odds/snapshot/${f.FixtureId}`)
+        if (Array.isArray(odds) && (odds as any[]).some(usable1x2)) results[idx] = { ...f, odds }
+      } catch { /* skip this fixture on an upstream error */ }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, () => worker()))
+  const data = results.filter(Boolean) as any[]
+  boardCache = { at: Date.now(), data }
+  return data
+}
+
+/**
+ * Run a real devnet escrow deposit→release so the demo can link the settlement on-chain. Self-pays
+ * (seller defaults to the buyer wallet) so ONE funded wallet is enough; set SELLER_WALLET to pay a
+ * distinct seller. Returns {ok:false,error} on any failure so the UI can fall back gracefully.
+ */
+async function settle(amountSol: number): Promise<unknown> {
+  try {
+    const buyer = buyerKeypair()
+    // pay the kit's seller wallet if present (set by setup.js), else self-pay so one funded wallet suffices.
+    const seller = new PublicKey(process.env.SELLER_WALLET || process.env.WALLET || buyer.publicKey.toBase58())
+    const reference = Keypair.generate().publicKey
+    const amount = Math.max(0.0001, Number.isFinite(amountSol) ? amountSol : 0.0005)
+    const program = await makeProgram(buyer, RPC)
+    const depositSig = await deposit(program, buyer, seller, reference, amount, 600)
+    const releaseSig = await release(program, buyer, seller, reference)
+    const pda = escrowPda(buyer.publicKey, reference).toBase58()
+    return {
+      ok: true, amountSol: amount, reference: reference.toBase58(),
+      deposit: { sig: depositSig, explorer: expl('tx', depositSig) },
+      release: { sig: releaseSig, explorer: expl('tx', releaseSig) },
+      escrow: { pda, explorer: expl('address', pda) },
+    }
+  } catch (e) {
+    return { ok: false, error: (e as Error).message }
+  }
+}
+
 http
   .createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Content-Type', 'application/json')
     try {
       const url = new URL(req.url ?? '/', `http://localhost:${PORT}`)
-      if (url.pathname === '/api/fixtures') {
+      if (url.pathname === '/api/board') {
+        // only fixtures with verified live 1X2 odds (odds inlined) — what the dashboard renders
+        res.end(JSON.stringify(await board()))
+      } else if (url.pathname === '/api/fixtures') {
         res.end(JSON.stringify(await txGet('/api/fixtures/snapshot')))
       } else if (url.pathname === '/api/odds') {
         res.end(JSON.stringify(await txGet(`/api/odds/snapshot/${url.searchParams.get('fixtureId') ?? ''}`)))
+      } else if (url.pathname === '/api/edge') {
+        // verified data (TxLINE) → LLM call: the on-thesis product, shared with the agent via analyzeEdge.
+        const fixtureId = url.searchParams.get('fixtureId') ?? ''
+        const [odds, fixtures] = await Promise.all([
+          txGet(`/api/odds/snapshot/${fixtureId}`),
+          txGet('/api/fixtures/snapshot'),
+        ])
+        res.end(JSON.stringify(await analyzeEdge({ fixtureId, odds, fixtures })))
+      } else if (url.pathname === '/api/settle') {
+        // real devnet escrow deposit→release so the demo links the settlement on-chain.
+        res.end(JSON.stringify(await settle(Number(url.searchParams.get('amount') ?? '0.0005'))))
       } else {
         res.statusCode = 404
         res.end(JSON.stringify({ error: 'not found' }))
@@ -109,4 +201,4 @@ http
       res.end(JSON.stringify({ error: (e as Error).message, detail: (e as any)?.response?.data }))
     }
   })
-  .listen(PORT, () => console.error(`[proxy] http://localhost:${PORT}  (GET /api/fixtures, /api/odds?fixtureId=)`))
+  .listen(PORT, () => console.error(`[proxy] http://localhost:${PORT}  (GET /api/board · /api/fixtures · /api/odds?fixtureId= · /api/edge?fixtureId= · /api/settle?amount=)`))

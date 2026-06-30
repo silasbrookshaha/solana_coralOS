@@ -4,8 +4,8 @@
  * fake escrow ledger. No devnet, no network — so CI covers the settlement *sequence* the agents speak
  * (and the `reference` threading + escrow lifecycle), not just the individual parsers in isolation.
  *
- * The bidding economics themselves are unit-tested in coral-agents/seller-agent (bidder.test.ts); here
- * the sellers bid from a fixture so the focus is the end-to-end protocol composition.
+ * Here the sellers bid from a fixture so the focus is the end-to-end protocol composition (the wire
+ * format + selection + the `reference` threading), not the bidding economics.
  */
 import { describe, it, expect } from 'vitest'
 import {

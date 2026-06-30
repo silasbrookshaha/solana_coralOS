@@ -1,6 +1,7 @@
 # examples
 
-- **[marketplace/](marketplace/README.md)** — **the headline.** Launches the market session (a buyer + three LLM seller personas) and the React dashboard. Start here.
-- **[agent-economy/](agent-economy/README.md)** — supporting pieces: `config/coral.toml` (the wallet-free CoralOS config) and `escrow/` (the Anchor settlement contract).
+- **[txodds/](txodds/README.md)** — **the World Cup Oracle.** An LLM agent that sells a verified
+  TxODDS World Cup edge and settles each delivery through a Solana escrow on devnet. `npm run dev`
+  (from the repo root) brings up the proxy + the React board. Start here.
 
 Full walkthrough in the [root README](../README.md).

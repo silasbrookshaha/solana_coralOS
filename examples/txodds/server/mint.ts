@@ -109,7 +109,7 @@ async function main(): Promise<void> {
   console.error('[mint] ✓ TXLINE_API_KEY + BUYER_SERVICE=txline written to .env')
   console.error(`[mint]   the market will rotate through ${pick.length} fixtures:`)
   for (const f of pick) console.error(`[mint]     ${f.FixtureId}  ${f.Participant1} v ${f.Participant2}`)
-  console.error('[mint]   next: `just dev`  (or: docker compose up -d coral && node scripts/dashboard.js → Start a market)')
+  console.error('[mint]   next: `npm run dev`  (proxy + Oracle UI), or `npm run web` to open the board')
 }
 
 main().catch((e) => { console.error('[mint] failed:', (e as Error).message); process.exit(1) })

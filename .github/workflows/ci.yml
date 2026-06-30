@@ -19,27 +19,15 @@ jobs:
       - run: cd packages/agent-runtime && npm run typecheck
       - run: cd packages/agent-runtime && npm test
 
-  agents-and-examples:
-    name: Agents + examples (typecheck + tests)
+  txodds:
+    name: TxODDS World Cup Oracle (typecheck + tests)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 20
-      - name: Build the runtime (dependents need its dist)
+      - name: Build the runtime (the example needs its dist)
         run: cd packages/agent-runtime && npm install && npm run build
-      - name: seller-agent (typecheck + tests)
-        run: cd coral-agents/seller-agent && npm install && npm run typecheck && npm test
-      - name: buyer-agent (typecheck + tests)
-        run: cd coral-agents/buyer-agent && npm install && npm run typecheck && npm test
-      - name: broker (typecheck + tests)
-        run: cd coral-agents/broker && npm install && npm run typecheck && npm test
-      - name: marketplace launcher (typecheck)
-        run: cd examples/marketplace && npm install && npm run typecheck
-      - name: marketplace feed (typecheck + tests)
-        run: cd examples/marketplace/feed && npm install && npm run typecheck && npm test
-      - name: marketplace web (typecheck)
-        run: cd examples/marketplace/web && npm install && npm run typecheck
-      - name: txodds (typecheck)
-        run: cd examples/txodds && npm install && npm run typecheck
+      - name: txodds (typecheck + tests)
+        run: cd examples/txodds && npm install && npm run typecheck && npm test
