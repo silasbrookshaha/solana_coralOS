@@ -56,6 +56,10 @@ little devnet SOL. It subscribes that wallet to the free World Cup tier on devne
 fixtures with verified live odds**. The browser never sees the token or the key — everything sensitive
 stays in the proxy. Without funding/a key, the board shows clearly-labelled sample data.
 
+On the board you can also click **Pay with Phantom / Solflare** to buy the read yourself: a real
+**Solana Pay** reference-tagged transfer from your wallet to the seller, verified on-chain by the proxy
+(`/api/pay-intent` + `/api/pay-verify`). Needs a Devnet-funded wallet.
+
 ## CoralOS round (the multi-agent view)
 
 The web demo above is one agent. For the **multi-agent** version — a buyer agent + a World Cup seller

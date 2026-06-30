@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'https://esm.sh/react@18.3.1'
 import { createRoot } from 'https://esm.sh/react-dom@18.3.1/client'
 import htm from 'https://esm.sh/htm@3.1.1'
+import { Connection, PublicKey, Transaction, SystemProgram, LAMPORTS_PER_SOL } from 'https://esm.sh/@solana/web3.js@1.98.4'
 
 const html = htm.bind(React.createElement)
 const PROXY = window.TXODDS_PROXY ?? 'http://localhost:8801'
@@ -101,6 +102,18 @@ const ESCROW_PROGRAM = 'R5NWNg9eRLWWQU81Xbzz5Du1k7jTDeeT92Ty6qCeXet'
 const SETTLE_SOL = 0.001
 const shortAddr = (a) => (a ? `${String(a).slice(0, 4)}…${String(a).slice(-4)}` : '')
 const addrLink = (a) => `https://explorer.solana.com/address/${a}?cluster=devnet`
+const txLink = (s) => `https://explorer.solana.com/tx/${s}?cluster=devnet`
+const DEVNET_RPC = 'https://api.devnet.solana.com'
+
+// Detect an injected browser wallet (Phantom / Solflare) — no wallet-adapter needed for a no-build app.
+function getWallet() {
+  const w = window
+  const phantom = w.phantom?.solana ?? (w.solana?.isPhantom ? w.solana : null)
+  const solflare = w.solflare?.isSolflare ? w.solflare : null
+  if (phantom) return { name: 'Phantom', provider: phantom }
+  if (solflare) return { name: 'Solflare', provider: solflare }
+  return null
+}
 
 // ── odds board ──────────────────────────────────────────────────────────────
 // LIVE TxODDS markets are messy: Pct values arrive as strings ("41.946"), some priced "NA",
@@ -268,6 +281,60 @@ function SettleResult({ r }) {
       <a href=${addrLink(ESCROW_PROGRAM)} target="_blank" rel="noreferrer">escrow program ↗</a></div>`
 }
 
+// Pay for the read yourself with Phantom / Solflare — a real Solana Pay reference-tagged transfer to
+// the seller, verified on-chain by the proxy. The wallet signs; we submit to devnet so the cluster is
+// guaranteed regardless of the wallet's setting. (Needs a Devnet-funded wallet.)
+function PayButton({ fixture }) {
+  const [st, setSt] = useState({ status: 'idle', msg: '' })
+  const wallet = getWallet()
+
+  const pay = async () => {
+    if (!wallet) { setSt({ status: 'error', msg: 'No Phantom/Solflare detected — install one and switch it to Devnet' }); return }
+    try {
+      setSt({ status: 'busy', msg: 'connecting wallet…' })
+      const { provider } = wallet
+      const conn = await provider.connect()
+      const payer = new PublicKey((conn?.publicKey ?? provider.publicKey).toString())
+
+      setSt({ status: 'busy', msg: 'building payment…' })
+      const intent = await (await fetch(`${PROXY}/api/pay-intent?fixtureId=${fixture.FixtureId}&amount=${SETTLE_SOL}`)).json()
+      const connection = new Connection(DEVNET_RPC, 'confirmed')
+      const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
+      const ix = SystemProgram.transfer({
+        fromPubkey: payer, toPubkey: new PublicKey(intent.recipient),
+        lamports: Math.round(intent.amountSol * LAMPORTS_PER_SOL),
+      })
+      ix.keys.push({ pubkey: new PublicKey(intent.reference), isSigner: false, isWritable: false }) // Solana Pay reference
+      const tx = new Transaction({ feePayer: payer, blockhash, lastValidBlockHeight }).add(ix)
+
+      setSt({ status: 'busy', msg: `approve in ${wallet.name}…` })
+      const signed = await provider.signTransaction(tx)
+      const sig = await connection.sendRawTransaction(signed.serialize())
+      setSt({ status: 'busy', msg: 'confirming on devnet…' })
+      await connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'confirmed')
+
+      const v = await (await fetch(`${PROXY}/api/pay-verify?sig=${sig}&reference=${intent.reference}&amount=${intent.amountSol}&recipient=${intent.recipient}`)).json()
+      setSt({ status: v.ok ? 'ok' : 'error', msg: v.ok ? '' : 'paid, but verification failed', explorer: v.explorer ?? txLink(sig), amountSol: intent.amountSol })
+    } catch (e) {
+      setSt({ status: 'error', msg: String(e?.message ?? e).slice(0, 100) })
+    }
+  }
+
+  if (st.status === 'ok') return html`
+    <div class="settled ok"><span class="bind-tag">paid</span> you paid <b>${st.amountSol} SOL</b> with ${wallet?.name} —
+      <a href=${st.explorer} target="_blank" rel="noreferrer">tx ↗</a> · verified by its Solana Pay reference</div>`
+
+  return html`
+    <div class="pay-self">
+      <button class="pay-btn" disabled=${st.status === 'busy'} onClick=${pay}>
+        ${st.status === 'busy'
+          ? html`<span class="spin"></span> ${st.msg}`
+          : `Pay it yourself with Phantom / Solflare · ${SETTLE_SOL} SOL`}
+      </button>
+      ${st.status === 'error' && html`<span class="pay-err">${st.msg}</span>`}
+    </div>`
+}
+
 function App() {
   const [fixtures, setFixtures] = useState(null)
   const [source, setSource] = useState(null) // 'live' | 'demo'
@@ -376,6 +443,7 @@ function App() {
                 <span class="spin"></span> agent delivered — arbiter settling ${SETTLE_SOL} SOL in escrow on devnet…
               </div>`}
               ${settleRes && html`<${SettleResult} r=${settleRes} />`}
+              ${selected && html`<${PayButton} fixture=${selected} />`}
             </div>
           </div>
         </section>`}

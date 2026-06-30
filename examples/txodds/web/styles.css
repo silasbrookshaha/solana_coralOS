@@ -197,6 +197,13 @@ main { max-width: 1120px; margin: 0 auto; padding: 22px 24px 64px; }
 .spin { width: 13px; height: 13px; border-radius: 50%; border: 2px solid rgba(20,241,149,.3);
   border-top-color: var(--sol); animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+.pay-self { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-basis: 100%; margin-top: 4px; }
+.pay-btn { font: 700 13px 'Inter', sans-serif; color: #14072e; background: linear-gradient(90deg, #ab9ff2, #7c5cff);
+  border: none; border-radius: 10px; padding: 10px 16px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px;
+  transition: transform .12s, box-shadow .12s; box-shadow: 0 8px 22px rgba(124,92,255,.3); }
+.pay-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(124,92,255,.45); }
+.pay-btn:disabled { opacity: .65; cursor: default; }
+.pay-err { font-size: 12px; color: var(--away); }
 .settled { font-size: 13px; }
 .settled.ok { color: var(--sol); }
 .settled.sim { color: var(--gold); }

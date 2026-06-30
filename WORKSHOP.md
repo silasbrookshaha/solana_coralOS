@@ -40,10 +40,12 @@
 - **In this demo the reference is bound to the data:**
   `reference = sha256("txodds:<fixtureId>:<favourite>@<fairOdds>:<nonce>")`.
   So the on-chain escrow PDA **provably is the read you bought** — anyone with the preimage can verify it.
-- The **Solana Pay** helpers (`generatePaymentUrl` / `verifyPayment` in `runtime/src/solana/pay.ts`)
-  implement the canonical "reference as a read-only account" pattern and ship in the SDK for the
-  pay-per-call path; the oracle settles through the **escrow + arbiter** directly.
-- Code: `server/proxy.ts → boundReference()` · `agent/escrow.ts → escrowPda()` · `runtime/src/solana/pay.ts`.
+- **Solana Pay is wired in two ways:** (1) the agents/escrow settle programmatically; (2) a
+  **"Pay with Phantom / Solflare" button** lets a *human* buy the read — a real Solana Pay
+  reference-tagged transfer to the seller, signed by the user's wallet and **verified on-chain**
+  (`validateTransfer`). Same order-bound reference; submitted to devnet by the proxy.
+- Code: `server/proxy.ts → boundReference()` / `/api/pay-intent` / `/api/pay-verify` ·
+  `runtime/src/solana/pay.ts → verifyPayment` · `web/app.js → PayButton`.
 
 ---
 
@@ -97,7 +99,8 @@
 
 Pick a fixture → verified de-margined board with **fair odds** per outcome → the agent's **read** (LLM,
 deterministic fallback) → **auto-settle through the arbiter** (buyer → vault → arbiter releases to the
-seller), Explorer links, reference bound to the read.
+seller), Explorer links, reference bound to the read. Or click **"Pay with Phantom / Solflare"** to buy
+it yourself — a real Solana Pay transfer from your wallet, verified on-chain (needs a Devnet wallet).
 
 ---
 

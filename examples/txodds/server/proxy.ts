@@ -26,7 +26,7 @@ import {
 import nacl from 'tweetnacl'
 import bs58 from 'bs58'
 import { fileURLToPath } from 'node:url'
-import { assertDevnet } from '@pay/agent-runtime'
+import { assertDevnet, verifyPayment } from '@pay/agent-runtime'
 import { analyzeEdge, fairLine } from '../agent/edge.js'
 import {
   makeArbiter, initConfig, open as arbiterOpen, arbitrateRelease,
@@ -325,6 +325,27 @@ http
           result = await settle(amount, fixtureId)
         }
         res.end(JSON.stringify(result))
+      } else if (url.pathname === '/api/pay-intent') {
+        // Solana Pay intent for a USER wallet (Phantom/Solflare): pay the seller for this read, tagged
+        // with the order-bound reference. The browser builds + signs the transfer; /api/pay-verify confirms.
+        const fixtureId = url.searchParams.get('fixtureId') ?? ''
+        const amountSol = Math.max(0.001, Number(url.searchParams.get('amount') ?? '0.001'))
+        const recipient = process.env.SELLER_WALLET || process.env.WALLET || buyerKeypair().publicKey.toBase58()
+        const { reference, order } = await boundReference(fixtureId)
+        res.end(JSON.stringify({
+          cluster: 'devnet', recipient, amountSol, reference: reference.toBase58(),
+          label: 'World Cup Oracle',
+          message: order.favourite ? `${order.favourite} @ ${order.fairOdds}${order.matchup ? ` (${order.matchup})` : ''}` : 'TxODDS edge',
+          order,
+        }))
+      } else if (url.pathname === '/api/pay-verify') {
+        // confirm the user's Solana Pay transfer landed on devnet: right recipient + amount + reference.
+        const sig = url.searchParams.get('sig') ?? ''
+        const reference = url.searchParams.get('reference') ?? ''
+        const amountSol = Number(url.searchParams.get('amount') ?? '0.001')
+        const recipient = url.searchParams.get('recipient') ?? (process.env.SELLER_WALLET || process.env.WALLET || '')
+        const ok = !!(sig && reference && recipient) && (await verifyPayment(sig, { recipient, amountSol, reference }))
+        res.end(JSON.stringify({ ok, sig: sig || undefined, explorer: sig ? expl('tx', sig) : undefined }))
       } else {
         res.statusCode = 404
         res.end(JSON.stringify({ error: 'not found' }))
