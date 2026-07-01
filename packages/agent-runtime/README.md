@@ -17,7 +17,7 @@ Each is a folder under `src/` with its own barrel; the root `src/index.ts` re-ex
 
 | Module | Exports | Folder |
 |--------|---------|--------|
-| **LLM** | `complete()` — SDK-free provider shim (Anthropic default; `LLM_PROVIDER=openai` flips it) + `parseJsonReply` | `llm/` (`complete.ts`) |
+| **LLM** | `complete()` — SDK-free provider shim (**Venice AI** is the kit's LLM; `LLM_PROVIDER` also accepts `openai`/`anthropic`) + `parseJsonReply` | `llm/` (`complete.ts`) |
 | **Solana** | `solanaConnection`/`assertDevnet` (devnet guard), `generatePaymentUrl`/`verifyPayment`/`signTransfer`/`loadKeypairB58` (reference-bound) | `solana/` (`connection.ts`, `pay.ts`) |
 | **CoralOS** | `startCoralAgent(config, run)`, `CoralMcpAgent`, and the `ctx` verbs (`waitForMention`, `waitForAgent`, `reply`, `send`, `createThread`) | `coral/` (`mcp.ts`, `server.ts`) |
 | **Market** | `formatWant`/`parseBid`/`parseAward`/… + `selectBids`/`pickCheapest` — the WANT/BID/AWARD wire protocol (pure) | `market/` (`protocol.ts`) |

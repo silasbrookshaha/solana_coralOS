@@ -9,8 +9,8 @@
  *   docker compose up -d coral      # start coral-server (the MCP coordinator)
  *   cd examples/txodds && npm run coral
  *
- * Needs the repo .env: BUYER_KEYPAIR_B58 (funded), WALLET (seller payout), ANTHROPIC_API_KEY, and
- * TXLINE_API_KEY (mint one with `npm run mint`).
+ * Needs the repo .env: BUYER_KEYPAIR_B58 (funded), WALLET (seller payout), VENICE_API_KEY (the kit's
+ * LLM; or another provider — see LLM.md), and TXLINE_API_KEY (mint one with `npm run mint`).
  */
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
@@ -63,8 +63,9 @@ async function main(): Promise<void> {
   const rpc = env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
 
   const llm: Record<string, unknown> = {}
-  if (env.ANTHROPIC_API_KEY) llm.ANTHROPIC_API_KEY = str(env.ANTHROPIC_API_KEY)
+  if (env.VENICE_API_KEY) llm.VENICE_API_KEY = str(env.VENICE_API_KEY)   // the kit's LLM
   if (env.OPENAI_API_KEY) llm.OPENAI_API_KEY = str(env.OPENAI_API_KEY)
+  if (env.ANTHROPIC_API_KEY) llm.ANTHROPIC_API_KEY = str(env.ANTHROPIC_API_KEY)
   if (env.LLM_PROVIDER) llm.LLM_PROVIDER = str(env.LLM_PROVIDER)
   if (env.LLM_MODEL) llm.LLM_MODEL = str(env.LLM_MODEL)
   if (env.TRACE) llm.TRACE = str(env.TRACE)

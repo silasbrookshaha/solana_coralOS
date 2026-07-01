@@ -1,11 +1,14 @@
-# Example: TxODDS World Cup Oracle
+# The default demo — a World Cup oracle
 
-> An agent that **sells verified World Cup data for devnet SOL**. It fetches verified TxODDS odds on
-> devnet, turns them into fair (break-even) odds + a one-line read, and the kit's arbiter-gated escrow
-> settles the delivery - automatically, on-chain. Free tier, devnet, no Docker.
+> **The fastest way to see the rails, and the thing you fork.** One agent sells a verified World Cup read
+> for devnet SOL; the kit's arbiter-gated escrow settles the delivery automatically, on-chain. Free tier,
+> devnet, no Docker.
 
-This is the worked answer to the track brief - *build an agent that sells a real service and gets paid
-in SOL* - pointed at the hackathon's own dataset ([TxODDS' **TxLINE**](https://txline-docs.txodds.com)).
+This is **the default demo, not the product** — it proves the loop end-to-end so you don't have to build
+it. To sell your own thing, swap the `deliverService()` in [`agent/service.ts`](agent/service.ts) (ad
+copy, a research brief, a routed job, a verified fact). The demo happens to be pointed at the hackathon's
+own dataset ([TxODDS' **TxLINE**](https://txline-docs.txodds.com)); your service can be anything an agent
+can deliver.
 
 ## What it is
 

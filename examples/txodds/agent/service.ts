@@ -1,19 +1,24 @@
 /**
- * TxODDS service — a self-contained reference for selling verified TxLINE World Cup data for SOL.
+ * `deliverService()` — THE fork point. This is the one function you replace to sell your own thing.
  *
- * Note: the live demo serves the edge through the proxy (`server/proxy.ts` → `/api/edge`), which shares
- * the same verified-odds→LLM-call transform via `analyzeEdge()` in `agent/edge.ts`. This module is the
- * standalone, minimal version of the same idea — the `deliverService()` fork point: read it to
- * understand the shape, then wire it in as `case 'txline': return deliverTxOdds(payload)`.
+ * A seller gets a paid request and returns the string the buyer paid for. The default body below sells
+ * verified TxLINE World Cup data (fixtures / odds / an LLM "edge" read) — that's just the demo that
+ * proves the rails. To build your own agent economy, return your own value here (ad copy, a research
+ * brief, a routed job, a verified fact), give the seller a persona (`coral-agent.toml`), and tell the
+ * buyer how to value bids. The escrow, market, Solana Pay, and LLM shim don't change.
  *
- * Request grammar (the buyer's request string after the `txline` keyword):
+ * The live web demo serves this same transform through the proxy (`server/proxy.ts` → `/api/edge`) via
+ * `analyzeEdge()` in `agent/edge.ts`; this module is the standalone, minimal version — read it to
+ * understand the shape, then wire your delivery in as `case 'yourservice': return deliverYours(payload)`.
+ *
+ * Request grammar (the buyer's request string after the service keyword):
  *   "fixtures"          -> upcoming World Cup / Int Friendlies fixtures              (data only)
  *   "odds <fixtureId>"  -> de-margined StablePrice odds for a fixture                (data only)
- *   "edge <fixtureId>"  -> odds + fair (break-even) odds + an LLM read               (all three pillars)
+ *   "edge <fixtureId>"  -> odds + fair (break-even) odds + an LLM read               (the full loop)
  *
- * Pillars in play:
+ * Pillars in play (all reusable for your own service):
  *   - Data     verified TxLINE fixtures/odds, fetched on devnet (TxLineClient).
- *   - LLM      turns raw odds into a sellable insight in the `edge` verb (`analyzeEdge` → `complete()`).
+ *   - LLM      turns raw data into a sellable insight (Venice AI via `analyzeEdge` → `complete()`).
  *   - Solana   the buyer escrow settles delivery on-chain (see ../server/proxy.ts `/api/settle`).
  */
 import { TxLineClient } from './txline.js'

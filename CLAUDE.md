@@ -4,22 +4,34 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-A TypeScript starter kit for a Solana **agent that sells verified data**: the **TxODDS World Cup
-Oracle**. An LLM agent fetches verified, de-margined World Cup odds on devnet, turns them into fair
-(break-even) odds + a one-line read, and on delivery the buyer escrow **settles automatically** — a real
-deposit→release through a Solana escrow contract (gated by a neutral arbiter). The stack is pure
-TypeScript end-to-end; the **only Rust is the escrow + arbiter Anchor programs**, the **settlement
-spine** (not optional). A forkable React dashboard renders the live board. The fastest way to see it:
-`npm run dev` brings up the data/escrow proxy + the web UI and opens the browser (**no Docker**). A
-second, **multi-agent** view — the **CoralOS round** (`docker compose up -d coral` + `npm run coral`) —
-runs a buyer + seller agent trading the edge over coral-server (MCP), settling via the escrow on devnet.
+A **Solana × CoralOS starter kit for agents that earn** — a forkable hackathon template for autonomous
+services that get paid on-chain. The full devnet loop is already wired —
+**WANT → BID → AWARD → DEPOSITED → DELIVERED → RELEASED**: an LLM agent sells a service, buyers reason
+about value, sellers compete on price/quality, funds lock in a Solana escrow, delivery triggers release,
+no-shows refund. A builder's job is **one function** — replace `deliverService()`
+([`examples/txodds/agent/service.ts`](examples/txodds/agent/service.ts)) with something an agent can
+sell — plus the seller persona and the buyer's value criteria.
+
+The **World Cup oracle is the default demo, not the product**: it sells a verified, de-margined odds
+read to prove the rails end-to-end. Frame work around outcomes (a freelancer / research / broker /
+oracle / reseller agent), not the sports data.
+
+The stack is pure TypeScript end-to-end; the **only Rust is the escrow + arbiter Anchor programs**, the
+**settlement spine** (not optional, already deployed to devnet). Two ways to see it: `npm run dev` brings
+up the single-agent demo (data/escrow proxy + React UI, **no Docker**); the full market —
+`docker compose up -d coral` + `bash build-agents.sh` + `cd examples/marketplace && npm start` — runs
+competing buyer/seller agents over coral-server (MCP), settling via the escrow on devnet. The kit's LLM
+is **Venice AI** (free credits; `LLM_PROVIDER` also accepts `openai`/`anthropic` — see `LLM.md`).
 
 ## Repo Layout
 
 | Directory | Purpose |
 |-----------|---------|
-| `examples/txodds/` | The World Cup Oracle. `agent/` (`edge.ts` — the verified-odds→LLM-call transform; `service.ts` — the `deliverService` fork point; `escrow.ts` — the buyer-side escrow client), `server/` (`mint.ts`, `proxy.ts` — the live data + escrow proxy), `web/` (the no-build React app), `escrow/` (the Anchor escrow contract — the settlement spine). |
-| `packages/agent-runtime/` | The runtime, one folder each under `src/`: the LLM provider shim (`llm/`), Solana Pay + devnet guard (`solana/`), a CoralOS MCP client (`coral/`), and the market protocol (`market/`). Root `src/index.ts` re-exports all of them. The oracle uses `llm/` + `solana/`; `coral/` + `market/` are there if you grow it into a multi-agent market. |
+| `examples/txodds/` | The World Cup Oracle (the headline example). `agent/` (`edge.ts` — the verified-odds→LLM-call transform; `service.ts` — the `deliverService` fork point; `escrow.ts` — the buyer-side escrow client), `server/` (`mint.ts`, `proxy.ts` — the live data + escrow proxy), `web/` (the no-build React app), `escrow/` (the Anchor escrow + arbiter programs — the settlement spine). |
+| `examples/agent-economy/` | **Three front doors** on CoralOS (needs Docker): `autonomous/` (agent→agent purchase), `bridge/` (HTTP bridge + React checkout — the human front door), `quickstart/` (bare 402 pay-per-call, no Docker/CoralOS), `web/` (3-tab dashboard), `config/coral.toml`. Escrow references point at `examples/txodds/escrow/`. |
+| `examples/marketplace/` | **Competitive bidding market** (needs Docker): `start.ts` launches a buyer + persona sellers in one CoralOS session; `feed/` (SSE feed folding session state into rounds, with tests), `web/` (React visualizer + Playwright tests). Settles via the escrow. |
+| `packages/agent-runtime/` | The runtime, one folder each under `src/`: the LLM provider shim (`llm/`), Solana Pay + devnet guard (`solana/`), a CoralOS MCP client (`coral/`), and the market protocol (`market/`). Root `src/index.ts` re-exports all of them. The oracle uses `llm/` + `solana/`; `coral/` + `market/` power the multi-agent examples. |
+| `coral-agents/` | The agents coral-server launches per session: `buyer-agent`, `seller-agent` (+ the `seller-worldcup` persona), plus `broker/` (swarm — buys upstream, resells at a markup, escrow both legs), `echo-agent/` (minimal test agent), `user_proxy/` (the human's puppet for the bridge). |
 | `scripts/` | `txodds.js` (the `npm run dev` launcher — proxy + web + browser) and `setup.js` (devnet wallet generation → `.env`). |
 
 ## Commands
@@ -58,8 +70,8 @@ cd examples/txodds && npm install && npm run typecheck && npm test   # incl. edg
 
 ### packages/agent-runtime — the runtime
 
-- **LLM** (`llm/`) — `complete.ts` (`complete()` — SDK-free `fetch` shim; Anthropic default,
-  `LLM_PROVIDER=openai` flips it) + `parseJsonReply` for model output.
+- **LLM** (`llm/`) — `complete.ts` (`complete()` — SDK-free `fetch` shim; **Venice AI** is the kit's LLM,
+  `LLM_PROVIDER` also accepts `openai`/`anthropic`, no code change) + `parseJsonReply` for model output.
 - **Solana** (`solana/`) — `connection.ts` (`solanaConnection`/`assertDevnet` guard) + `pay.ts`
   (`generatePaymentUrl`/`verifyPayment`/`signTransfer`/`loadKeypairB58`, reference-bound).
 - **CoralOS** (`coral/`) + **market** (`market/`) — an MCP client and the WANT/BID/AWARD protocol. Not
@@ -99,4 +111,4 @@ arbiter. Build with `anchor build`; the demo runs against the deployed ids. See 
 - **`examples/txodds` depends on `@pay/agent-runtime` via a `file:` dep** — run `npm run build` in
   `packages/agent-runtime` first so the dist exists.
 - **Secrets live in `.env`** (gitignored). `server/proxy.ts` loads the repo-root `.env`; the proxy needs
-  `BUYER_KEYPAIR_B58` (from `setup.js`, funded) and `ANTHROPIC_API_KEY` (or the OpenAI pair).
+  `BUYER_KEYPAIR_B58` (from `setup.js`, funded) and `VENICE_API_KEY` (or another provider's key — see `LLM.md`).

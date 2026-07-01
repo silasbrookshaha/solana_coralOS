@@ -3,22 +3,28 @@
  *
  * SDK-free (`fetch`-based) so the runtime stays dependency-light. Provider is chosen by env, so the
  * whole market flips from Anthropic (dev default) to the sponsored OpenAI key with `LLM_PROVIDER=openai`
- * and no code change. Callers ask for a single JSON-shaped answer and enforce their own guards on it —
- * the model proposes, code disposes.
+ * (or to Venice AI with `LLM_PROVIDER=venice`) and no code change. Callers ask for a single JSON-shaped
+ * answer and enforce their own guards on it — the model proposes, code disposes.
+ *
+ * To add a provider in code: extend `LlmProvider`, add a `DEFAULT_MODEL` entry, teach `pickProvider()`
+ * to detect it, and dispatch to a `complete*()` in `complete()`. Venice is OpenAI-compatible, so it just
+ * reuses `completeOpenAICompatible()` with a different base URL + key.
  */
-export type LlmProvider = 'anthropic' | 'openai'
+export type LlmProvider = 'anthropic' | 'openai' | 'venice'
 
 /** Explicit `LLM_PROVIDER` wins; else auto-detect by which key is present; else Anthropic. */
 export function pickProvider(): LlmProvider {
   const p = process.env.LLM_PROVIDER?.toLowerCase()
-  if (p === 'openai' || p === 'anthropic') return p
+  if (p === 'openai' || p === 'anthropic' || p === 'venice') return p
   if (process.env.OPENAI_API_KEY) return 'openai'
+  if (process.env.VENICE_API_KEY) return 'venice'
   return 'anthropic'
 }
 
 const DEFAULT_MODEL: Record<LlmProvider, string> = {
   anthropic: 'claude-haiku-4-5-20251001',
   openai: 'gpt-4o-mini',
+  venice: 'llama-3.3-70b',
 }
 
 export interface CompleteOpts {
@@ -42,6 +48,8 @@ export async function complete(opts: CompleteOpts): Promise<string> {
 
   const text = provider === 'openai'
     ? await completeOpenAI(opts, model, maxTokens)
+    : provider === 'venice'
+    ? await completeVenice(opts, model, maxTokens)
     : await completeAnthropic(opts, model, maxTokens)
 
   if (trace) console.error(`[llm] ← ${text.slice(0, 300)}`)
@@ -69,9 +77,37 @@ async function completeAnthropic(opts: CompleteOpts, model: string, maxTokens: n
 async function completeOpenAI(opts: CompleteOpts, model: string, maxTokens: number): Promise<string> {
   const key = process.env.OPENAI_API_KEY
   if (!key) throw new Error('OPENAI_API_KEY not set')
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  return completeOpenAICompatible(opts, model, maxTokens, {
+    url: 'https://api.openai.com/v1/chat/completions',
+    key,
+    label: 'OpenAI',
+  })
+}
+
+/**
+ * Venice AI — OpenAI-compatible, so it reuses the same request shape against Venice's base URL.
+ * Get a key at https://venice.ai/settings/api (new accounts can redeem code IMPERIAL50 for free credits).
+ */
+async function completeVenice(opts: CompleteOpts, model: string, maxTokens: number): Promise<string> {
+  const key = process.env.VENICE_API_KEY
+  if (!key) throw new Error('VENICE_API_KEY not set (get one at https://venice.ai/settings/api)')
+  return completeOpenAICompatible(opts, model, maxTokens, {
+    url: 'https://api.venice.ai/api/v1/chat/completions',
+    key,
+    label: 'Venice',
+  })
+}
+
+/** The OpenAI chat-completions request shape, shared by any OpenAI-compatible provider (OpenAI, Venice). */
+async function completeOpenAICompatible(
+  opts: CompleteOpts,
+  model: string,
+  maxTokens: number,
+  endpoint: { url: string; key: string; label: string },
+): Promise<string> {
+  const res = await fetch(endpoint.url, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${key}`, 'content-type': 'application/json' },
+    headers: { Authorization: `Bearer ${endpoint.key}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       model,
       max_tokens: maxTokens,
@@ -81,7 +117,7 @@ async function completeOpenAI(opts: CompleteOpts, model: string, maxTokens: numb
       ],
     }),
   })
-  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 200)}`)
+  if (!res.ok) throw new Error(`${endpoint.label} ${res.status}: ${(await res.text()).slice(0, 200)}`)
   const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> }
   return (data.choices?.[0]?.message?.content ?? '').trim()
 }
