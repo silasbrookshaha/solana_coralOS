@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Generates the devnet wallets the World Cup Oracle needs, writes .env, and saves the addresses to
+// Generates the devnet wallets the bounty-brief marketplace needs, writes .env, and saves the addresses to
 // WALLETS.txt. Safe to re-run: existing wallets/keys are preserved; only what's missing is generated.
 //
 // Usage: node scripts/setup.js            # buyer (signs the escrow) + seller (paid) wallets
@@ -50,7 +50,7 @@ writeFileSync(envPath, env)
 
 // -- report --
 const block = [
-  'World Cup Oracle - devnet wallets',
+  'Bounty Brief Market - devnet wallets',
   `Generated: ${new Date().toISOString()}`,
   '',
   `  Buyer   wallet  ${buyerPubkey}   <- signs + funds the escrow (FUND THIS)`,
@@ -69,10 +69,12 @@ console.log('(saved to WALLETS.txt - keys written to .env)')
 console.log(`
 Next: add your LLM key to .env — the kit uses Venice AI (LLM_PROVIDER=venice + VENICE_API_KEY=..., free
 credits with code IMPERIAL50 at venice.ai/settings/api; OpenAI/Anthropic also work — see LLM.md),
-fund the BUYER wallet above, then run the demo:
+fund the BUYER wallet above, then run the market:
 
-  npm run dev          # starts the proxy (live data + escrow) + the Oracle UI, opens the browser
+  bash build-agents.sh
+  docker compose up -d coral
+  TRACE=1 npm run demo:bounty-brief
 
-The board fills from live TxODDS data; selecting a fixture delivers the agent's read and the buyer
-escrow settles it to the distinct seller on devnet automatically.
+The buyer purchases a bounty due-diligence brief, receives a deterministic report, and releases escrow
+to the distinct seller on devnet automatically.
 `)

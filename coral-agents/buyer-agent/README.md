@@ -16,7 +16,7 @@ WANT -> BID* -> AWARD
 > to come online via [Coordination](https://docs.coralos.ai/concepts/coordination), all inside a
 > [Session](https://docs.coralos.ai/concepts/sessions). End-to-end wiring: [/CORAL.md](../../CORAL.md).
 
-`SETTLEMENT_MODE=direct` keeps the legacy base escrow path available, but the TxODDS CoralOS round uses
+`SETTLEMENT_MODE=direct` keeps the legacy base escrow path available, but the bounty-brief CoralOS round uses
 `SETTLEMENT_MODE=arbiter` so the buyer cannot unilaterally claw back after delivery.
 
 ## Files
@@ -31,8 +31,8 @@ WANT -> BID* -> AWARD
 ## Env
 
 `BUYER_KEYPAIR_B58` funds the order. `ARBITER_KEYPAIR_B58` signs arbiter release/refund.
-`SELLER_WALLET` binds the payout wallet. `BUYER_SERVICE` defaults to `txline`, `BUYER_ARG` defaults to
-an `edge <fixtureId>` style request, and `MARKET_SELLERS` controls the competing sellers.
+`SELLER_WALLET` binds the payout wallet. `BUYER_SERVICE` defaults to `bounty-brief`, `BUYER_ARG`
+defaults to the autonomous earning request, and `MARKET_SELLERS` controls the competing sellers.
 
 For best-value bid selection set an LLM key — the kit's LLM is **Venice AI** (`LLM_PROVIDER=venice` +
 `VENICE_API_KEY`; new accounts get $50 free via code `IMPERIAL50` at
@@ -48,4 +48,4 @@ npm run typecheck
 npm test
 ```
 
-Live settlement signs devnet transactions and is exercised through `examples/txodds/coral`.
+Live settlement signs devnet transactions and is exercised through `examples/marketplace`.

@@ -7,8 +7,8 @@ edition = 4
 [agent]
 name = "buyer-agent"
 version = "0.1.0"
-description = "LLM-driven marketplace buyer. Broadcasts a WANT, collects competing bids, picks best value, and settles via arbiter-gated escrow."
-summary = "Autonomous TypeScript buyer that runs an open TxODDS market and settles through a neutral arbiter."
+description = "LLM-driven marketplace buyer. Broadcasts a WANT, collects competing bids, picks best bounty-intelligence value, and settles via arbiter-gated escrow."
+summary = "Autonomous TypeScript buyer that runs an open bounty-brief market and settles through a neutral arbiter."
 readme = "Market loop: WANT -> collect BIDs -> AWARD best value -> open arbiter escrow -> release on verified delivery."
 
 [agent.license]
@@ -21,10 +21,10 @@ ARBITER_KEYPAIR_B58 = { type = "string", default = "", description = "Base58-enc
 AGENT_NAME = { type = "string", default = "buyer-agent", description = "Market identity (matches the registry name)" }
 SELLER_WALLET = { type = "string", default = "", description = "Expected seller payout wallet - the buyer binds the escrow seller= to it before depositing (F3)" }
 BUYER_MAX_SOL = { type = "f64", default = 0.001, description = "Budget cap per round (the WANT budget)" }
-BUYER_SERVICE = { type = "string", default = "txline", description = "Service to shop for (sellers self-select on it)" }
-BUYER_ARG = { type = "string", default = "edge 18175397", description = "Argument passed to the winning seller's deliverService" }
+BUYER_SERVICE = { type = "string", default = "bounty-brief", description = "Service to shop for (sellers self-select on it)" }
+BUYER_ARG = { type = "string", default = "autonomous path to earn at least 100 USD without personal participation", description = "Argument passed to the winning seller's deliverService" }
 BUYER_ARGS = { type = "string", default = "", description = "Comma-separated args to rotate through, one per round (overrides BUYER_ARG)" }
-MARKET_SELLERS = { type = "string", default = "seller-worldcup,seller-fast,seller-premium", description = "Comma-separated seller names in the market thread" }
+MARKET_SELLERS = { type = "string", default = "seller-cheap,seller-premium", description = "Comma-separated seller names in the market thread" }
 BID_WINDOW_MS = { type = "f64", default = 5000, description = "How long to collect competing bids each round" }
 CYCLE_INTERVAL_MS = { type = "f64", default = 30000, description = "Delay between market rounds" }
 SOLANA_RPC_URL = { type = "string", default = "", description = "Solana RPC URL (devnet)" }

@@ -1,7 +1,7 @@
 # Build from repo root:
 #   docker build -f coral-agents/seller-agent/Dockerfile -t seller-agent:0.1.0 .
 
-FROM node:20-alpine AS builder
+FROM mirror.gcr.io/library/node:20-alpine AS builder
 WORKDIR /app
 
 # Mirror repo layout so "file:../../packages/agent-runtime" resolves correctly
@@ -18,7 +18,7 @@ COPY coral-agents/seller-agent/tsconfig.json ./coral-agents/seller-agent/
 COPY coral-agents/seller-agent/src/ ./coral-agents/seller-agent/src/
 RUN cd coral-agents/seller-agent && npx tsc
 
-FROM node:20-alpine
+FROM mirror.gcr.io/library/node:20-alpine
 WORKDIR /app
 COPY --from=builder /app/coral-agents/seller-agent/dist ./dist
 COPY --from=builder /app/coral-agents/seller-agent/node_modules ./node_modules

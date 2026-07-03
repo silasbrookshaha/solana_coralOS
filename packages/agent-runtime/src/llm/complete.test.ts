@@ -1,9 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest'
-import { pickProvider, parseJsonReply } from './complete.js'
+import { describe, it, expect, afterEach, vi } from 'vitest'
+import { complete, pickProvider, parseJsonReply } from './complete.js'
 
 const env = { ...process.env }
 afterEach(() => {
   process.env = { ...env }
+  vi.restoreAllMocks()
 })
 
 describe('pickProvider', () => {
@@ -37,6 +38,23 @@ describe('pickProvider', () => {
     delete process.env.OPENAI_API_KEY
     delete process.env.VENICE_API_KEY
     expect(pickProvider()).toBe('anthropic')
+  })
+})
+
+describe('complete', () => {
+  it('uses the provider default model when LLM_MODEL is blank', async () => {
+    process.env.LLM_PROVIDER = 'openai'
+    process.env.OPENAI_API_KEY = 'test-key'
+    process.env.LLM_MODEL = ''
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: 'ok' } }] }),
+    } as Response)
+
+    await expect(complete({ system: 's', user: 'u' })).resolves.toBe('ok')
+
+    const body = JSON.parse(fetchMock.mock.calls[0]![1]!.body as string)
+    expect(body.model).toBe('gpt-4o-mini')
   })
 })
 

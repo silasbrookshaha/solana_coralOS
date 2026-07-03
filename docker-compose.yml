@@ -1,11 +1,11 @@
-# CoralOS coordinator for the TxODDS round — stock coral-server, wallet-free.
+# CoralOS coordinator for the bounty-brief marketplace — stock coral-server, wallet-free.
 #
 #   docker compose up -d coral             # start coral-server (the MCP coordinator)
-#   cd examples/txodds && npm run coral     # launch one buyer + one World Cup seller round
+#   npm run demo:bounty-brief              # launch one buyer + competing bounty-brief sellers
 #
 # coral-server is a PURE MCP coordinator (no [wallet]). It launches the buyer + seller as containers per
 # session via the Docker socket; settlement is the Solana escrow (agent-side) — coral never holds a key.
-# Per-agent config is sent by examples/txodds/coral/round.ts in the session request; the env below is a
+# Per-agent config is sent by examples/marketplace/start.ts in the session request; the env below is a
 # fallback forwarded to the agents coral launches.
 
 services:
@@ -35,13 +35,10 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - LLM_PROVIDER=${LLM_PROVIDER:-}
       - LLM_MODEL=${LLM_MODEL:-}
-      # The TxLINE token the seller uses to fetch verified World Cup odds (mint with `npm run mint`).
-      - TXLINE_API_KEY=${TXLINE_API_KEY}
-      - TXLINE_BASE_URL=${TXLINE_BASE_URL:-}
       # Set TRACE=1 to log coral_* calls + on-chain Explorer links in the agents.
       - TRACE=${TRACE:-}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./examples/txodds/coral/coral.toml:/config/coral.toml:ro
+      - ./examples/agent-economy/config/coral.toml:/config/coral.toml:ro
       - ./coral-agents:/agents:ro
     restart: unless-stopped

@@ -1,123 +1,108 @@
 /**
- * TxODDS-only seller service.
+ * Bounty due-diligence seller service.
  *
- * The CoralOS demo sells one thing: a verified TxLINE fair-line read for a fixture. Generic legacy
- * services were useful scaffolding, but they dilute the market story and are intentionally not routed
- * here anymore.
+ * The agent sells one thing: a compact, decision-ready bounty brief for autonomous earning agents.
+ * The buyer pays because every weak bounty attempt wastes review time, GitHub reputation, and agent
+ * runtime. The seller returns a deterministic report that ranks opportunities by payout clarity,
+ * autonomy fit, competition, delivery effort, and payout risk.
  */
-import { complete, parseJsonReply } from '@pay/agent-runtime'
-
-const TXLINE_BASE = process.env.TXLINE_BASE_URL || 'https://txline-dev.txodds.com'
 
 export async function deliverService(request: string): Promise<string> {
   const [first, ...rest] = request.trim().split(/\s+/).filter(Boolean)
-  const service = (first ?? 'txline').toLowerCase()
-  if (service !== 'txline') {
-    return JSON.stringify({ error: 'unsupported service', service, supported: ['txline'] })
+  const service = (first ?? 'bounty-brief').toLowerCase()
+  if (!['bounty-brief', 'bounty'].includes(service)) {
+    return JSON.stringify({ error: 'unsupported service', service, supported: ['bounty-brief'] })
   }
-  return txlineService(rest.join(' '))
+  return JSON.stringify(buildBountyBrief(rest.join(' ')))
 }
 
-async function txlineGet(path: string): Promise<unknown> {
-  const apiToken = process.env.TXLINE_API_KEY
-  if (!apiToken) return { error: 'TXLINE_API_KEY not set - run the one-time subscribe (see examples/txodds)' }
-  const auth = await fetch(`${TXLINE_BASE}/auth/guest/start`, { method: 'POST' })
-  if (!auth.ok) return { error: `txline auth ${auth.status}` }
-  const jwt = ((await auth.json()) as { token: string }).token
-  const res = await fetch(`${TXLINE_BASE}${path}`, {
-    headers: { Authorization: `Bearer ${jwt}`, 'X-Api-Token': apiToken },
-  })
-  if (!res.ok) return { error: `txline ${path} ${res.status}` }
-  return res.json()
+type Candidate = {
+  id: string
+  title: string
+  rewardUsd: number
+  autonomyFit: number
+  payoutClarity: number
+  competitionRisk: number
+  deliveryEffort: number
+  notes: string[]
 }
 
-async function txlineService(request: string): Promise<string> {
-  const tokens = request.trim().split(/\s+/).filter(Boolean)
-  let action = (tokens[0] ?? 'fixtures').toLowerCase()
-  let fixtureId = tokens[1]
-  if (/^\d+$/.test(action)) {
-    fixtureId = action
-    action = 'edge'
-  }
+const CANDIDATES: Candidate[] = [
+  {
+    id: 'nostr-sync-tree',
+    title: 'nostr.ts sync tree helper',
+    rewardUsd: 100,
+    autonomyFit: 9,
+    payoutClarity: 7,
+    competitionRisk: 3,
+    deliveryEffort: 4,
+    notes: ['direct GitHub PR path', 'issue is labeled paid', 'maintainer review still required'],
+  },
+  {
+    id: 'superteam-agent-economy',
+    title: 'Superteam agent economy hackathon',
+    rewardUsd: 500,
+    autonomyFit: 8,
+    payoutClarity: 8,
+    competitionRisk: 7,
+    deliveryEffort: 9,
+    notes: ['agent submissions allowed', 'requires repo, deck, demo video, devnet proof', 'upside is large'],
+  },
+  {
+    id: 'crowded-api-helpers',
+    title: 'crowded API helper bounties',
+    rewardUsd: 50,
+    autonomyFit: 10,
+    payoutClarity: 5,
+    competitionRisk: 9,
+    deliveryEffort: 2,
+    notes: ['simple code tasks', 'many duplicate PRs', 'low review priority'],
+  },
+  {
+    id: 'frantic-small-skills',
+    title: 'Frantic funded skill tasks',
+    rewardUsd: 11,
+    autonomyFit: 7,
+    payoutClarity: 9,
+    competitionRisk: 5,
+    deliveryEffort: 5,
+    notes: ['visible paid receipts', 'low payout', 'payout method needed after acceptance'],
+  },
+]
 
-  switch (action) {
-    case 'odds':
-      return JSON.stringify({ service: 'txline-odds', fixtureId, odds: await txlineGet(`/api/odds/snapshot/${fixtureId}`) })
-    case 'edge':
-      return txlineEdge(fixtureId)
-    case 'fixtures':
-    default: {
-      const fixtures = await txlineGet('/api/fixtures/snapshot')
-      const list = Array.isArray(fixtures) ? fixtures : []
-      return JSON.stringify({ service: 'txline-fixtures', count: list.length, fixtures: list.slice(0, 10) })
-    }
-  }
+function score(candidate: Candidate): number {
+  return Math.round(
+    candidate.rewardUsd / 20 +
+    candidate.autonomyFit * 1.5 +
+    candidate.payoutClarity * 1.4 -
+    candidate.competitionRisk * 1.1 -
+    candidate.deliveryEffort * 0.8,
+  )
 }
 
-async function txlineEdge(fixtureId: string | undefined): Promise<string> {
-  const [odds, fixtures] = await Promise.all([
-    txlineGet(`/api/odds/snapshot/${fixtureId}`),
-    txlineGet('/api/fixtures/snapshot'),
-  ])
-  const market = Array.isArray(odds)
-    ? (odds as Array<Record<string, unknown>>).find((x) => String(x.SuperOddsType ?? '').includes('1X2'))
-    : undefined
-  const fx = Array.isArray(fixtures)
-    ? (fixtures as Array<Record<string, unknown>>).find((f) => String(f.FixtureId) === String(fixtureId))
-    : undefined
-  const teams = fx ? { home: fx.Participant1, away: fx.Participant2, competition: fx.Competition } : undefined
-  const matchup = teams ? `${teams.home} v ${teams.away}` : `fixture ${fixtureId}`
+function buildBountyBrief(request: string) {
+  const ranked = CANDIDATES
+    .map((candidate) => ({ ...candidate, score: score(candidate) }))
+    .sort((a, b) => b.score - a.score)
+  const best = ranked[0]
 
-  const analysis = await liveReadOrFallback(matchup, odds, market, teams)
-  return JSON.stringify({ service: 'txline-edge', fixtureId, teams, market, analysis })
-}
-
-async function liveReadOrFallback(
-  matchup: string,
-  odds: unknown,
-  market: Record<string, unknown> | undefined,
-  teams: Record<string, unknown> | undefined,
-): Promise<unknown> {
-  try {
-    const text = await complete({
-      system: 'You are a football trading analyst. Reply only as JSON {"call": string, "confidence": number}.',
-      user:
-        `For ${matchup}, make a one-line value read from these de-margined World Cup odds. ` +
-        `Odds: ${JSON.stringify(odds).slice(0, 1500)}`,
-      maxTokens: 180,
-    })
-    return parseJsonReply(text) ?? { call: text }
-  } catch (e) {
-    return deterministicRead(market, teams, (e as Error).message)
-  }
-}
-
-function deterministicRead(
-  market: Record<string, unknown> | undefined,
-  teams: Record<string, unknown> | undefined,
-  reason: string,
-): unknown {
-  const names = (market?.PriceNames ?? []) as string[]
-  const pcts = (market?.Pct ?? []) as string[]
-  let bestIndex = -1
-  let bestPct = -1
-  names.forEach((_, i) => {
-    const pct = Number(pcts[i])
-    if (Number.isFinite(pct) && pct > bestPct) {
-      bestPct = pct
-      bestIndex = i
-    }
-  })
-  if (bestIndex < 0) return { call: 'odds unavailable', note: `deterministic fallback: ${reason}` }
-  const raw = names[bestIndex]
-  const label = raw === 'part1'
-    ? (teams?.home ?? 'Home')
-    : raw === 'part2'
-      ? (teams?.away ?? 'Away')
-      : 'Draw'
   return {
-    call: `Odds favour ${label} (${bestPct.toFixed(0)}%)`,
-    confidence: Number((bestPct / 100).toFixed(2)),
-    note: `deterministic fallback: ${reason}`,
+    service: 'bounty-brief',
+    buyerRequest: request || 'autonomous path to earn at least 100 USD without personal participation',
+    recommendation: {
+      pursueNow: best.id,
+      rationale: `${best.title} has the best mix of payout, autonomy, and review path.`,
+      nextAction: best.id === 'nostr-sync-tree'
+        ? 'Monitor review and prepare a second autonomous submission in parallel.'
+        : 'Ship a minimal demo with public repo, deck, demo video, and devnet settlement proof.',
+    },
+    ranked,
+    guardrails: [
+      'Skip tasks requiring surveys, interviews, KYC, wallet claim, or personal social posting.',
+      'Treat crowded open-race tasks as backup unless the contribution is unique.',
+      'Only claim payout after acceptance; do not spend mainnet or existing user assets.',
+    ],
+    settlementValue: 'The buyer pays for a reusable due-diligence report that prevents low-EV bounty attempts.',
+    timestamp: new Date().toISOString(),
   }
 }

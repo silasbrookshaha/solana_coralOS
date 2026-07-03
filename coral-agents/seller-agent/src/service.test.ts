@@ -1,11 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { deliverService } from './service.js'
 
-describe('deliverService txline-only routing', () => {
+describe('deliverService bounty-brief routing', () => {
   const realFetch = global.fetch
 
   beforeEach(() => {
-    process.env.TXLINE_API_KEY = 'token'
     delete process.env.ANTHROPIC_API_KEY
     delete process.env.OPENAI_API_KEY
     delete process.env.VENICE_API_KEY
@@ -17,47 +16,26 @@ describe('deliverService txline-only routing', () => {
     vi.restoreAllMocks()
   })
 
-  it('rejects legacy generic services', async () => {
+  it('rejects unsupported services', async () => {
     const out = JSON.parse(await deliverService('coingecko eth'))
-    expect(out).toEqual({ error: 'unsupported service', service: 'coingecko', supported: ['txline'] })
+    expect(out).toEqual({ error: 'unsupported service', service: 'coingecko', supported: ['bounty-brief'] })
   })
 
-  it('returns fixtures from TxLINE', async () => {
-    global.fetch = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/guest/start')) return { ok: true, json: async () => ({ token: 'jwt' }) }
-      return { ok: true, json: async () => ([{ FixtureId: 1 }, { FixtureId: 2 }]) }
-    }) as unknown as typeof fetch
-
-    const out = JSON.parse(await deliverService('txline fixtures'))
-    expect(out).toMatchObject({ service: 'txline-fixtures', count: 2 })
+  it('returns a ranked bounty due-diligence brief', async () => {
+    const out = JSON.parse(await deliverService('bounty-brief agent autonomous USD100'))
+    expect(out).toMatchObject({
+      service: 'bounty-brief',
+      buyerRequest: 'agent autonomous USD100',
+      settlementValue: expect.stringContaining('due-diligence report'),
+    })
+    expect(out.recommendation.pursueNow).toBeTruthy()
+    expect(out.ranked[0].score).toBeGreaterThanOrEqual(out.ranked[1].score)
   })
 
-  it('produces a deterministic edge when no live LLM key is configured', async () => {
-    global.fetch = vi.fn(async (url: string) => {
-      if (url.endsWith('/auth/guest/start')) return { ok: true, json: async () => ({ token: 'jwt' }) }
-      if (url.includes('/api/odds/snapshot/123')) {
-        return {
-          ok: true,
-          json: async () => ([{
-            SuperOddsType: '1X2',
-            PriceNames: ['part1', 'x', 'part2'],
-            Pct: ['62', '22', '16'],
-          }]),
-        }
-      }
-      return {
-        ok: true,
-        json: async () => ([{
-          FixtureId: 123,
-          Participant1: 'A',
-          Participant2: 'B',
-          Competition: 'World Cup',
-        }]),
-      }
-    }) as unknown as typeof fetch
-
-    const out = JSON.parse(await deliverService('txline edge 123'))
-    expect(out.analysis.call).toContain('A')
-    expect(out.analysis.note).toContain('deterministic fallback')
+  it('includes user-participation guardrails', async () => {
+    const out = JSON.parse(await deliverService('bounty no personal participation'))
+    expect(out.guardrails.join(' ')).toContain('surveys')
+    expect(out.guardrails.join(' ')).toContain('KYC')
+    expect(out.guardrails.join(' ')).toContain('mainnet')
   })
 })

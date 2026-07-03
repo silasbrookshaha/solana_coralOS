@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { decideBid, type SellerConfig } from './bidder.js'
 import type { Want } from '@pay/agent-runtime'
 
-const cfg: SellerConfig = { name: 'seller-x', services: ['helius-risk'], floorSol: 0.0004, persona: 'test' }
-const want: Want = { round: 1, service: 'helius-risk', arg: '7jw', budgetSol: 0.001 }
+const cfg: SellerConfig = { name: 'seller-x', services: ['bounty-brief'], floorSol: 0.0004, persona: 'test' }
+const want: Want = { round: 1, service: 'bounty-brief', arg: 'agent work', budgetSol: 0.001 }
 const llmSays = (json: string) => async () => json
 
 describe('decideBid - code-enforced economics', () => {

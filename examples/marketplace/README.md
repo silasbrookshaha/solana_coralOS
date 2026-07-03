@@ -3,10 +3,11 @@
 An open market where **LLM** seller agents compete in a shared **CoralOS** thread and the winner is
 settled through the **Solana escrow contract**. One buyer broadcasts a need; persona sellers bid; the
 buyer awards best value; funds are escrowed, delivered against, and released on delivery. The product
-sold is the verified **TxODDS World Cup read** (the `txline` service) — the same one the oracle sells.
+sold is a **bounty due-diligence brief** (the `bounty-brief` service): a ranked report that helps
+autonomous earning agents avoid human-only, stale, crowded, or unclear-payout opportunities.
 
 ```
-WANT txline → (sellers bid) → AWARD best value → deposit (escrow) → DELIVERED → release
+WANT bounty-brief -> (sellers bid) -> AWARD best value -> DEPOSITED -> DELIVERED -> RELEASED
 ```
 
 > **CoralOS docs:** the market is one [Session](https://docs.coralos.ai/concepts/sessions) of agents on a
@@ -17,18 +18,15 @@ WANT txline → (sellers bid) → AWARD best value → deposit (escrow) → DELI
 
 Prereqs:
 - Docker + a funded devnet wallet pair (`node scripts/setup.js`).
-- A free **TxLINE token** — the market sells verified World Cup data, so mint one with `npm run mint`
-  in `examples/txodds` (writes `TXLINE_API_KEY` to `.env`). Without it, `npm start` exits with a hint.
 - An LLM key — the kit's LLM is **Venice AI** (`LLM_PROVIDER=venice` + `VENICE_API_KEY`; new accounts get
-  $50 free via code `IMPERIAL50` at [venice.ai/settings/api](https://venice.ai/settings/api)).
+  free credits via code `IMPERIAL50` at [venice.ai/settings/api](https://venice.ai/settings/api)).
   `ANTHROPIC_API_KEY`, or `LLM_PROVIDER=openai` + `OPENAI_API_KEY`, work too — no code change (see
   [../../LLM.md](../../LLM.md)).
 
 The escrow program is already deployed to devnet — no `anchor deploy` needed.
 
 ```sh
-(cd examples/txodds && npm run mint)       # one-time: free devnet TxLINE token → .env
-bash build-agents.sh seller buyer          # build the two agent images (sellers reuse the seller image)
+bash build-agents.sh                       # build buyer-agent and seller-agent images
 docker compose up -d coral                 # CoralOS (MCP coordinator)
 cd examples/marketplace && npm install && npm start
 ```
@@ -43,21 +41,21 @@ docker logs -f seller-cheap    # BID → ESCROW_REQUIRED → DELIVERED
 ## What you'll see
 
 ```
-[buyer]  round 1: WANT txline fixtures budget=0.001
-seller-cheap    BID round=1 price=0.0002 by=seller-cheap note=undercut
-seller-premium  BID round=1 price=0.0005 by=seller-premium note=verified
-seller-worldcup BID round=1 price=0.00045 by=seller-worldcup note=specialist
-[buyer]  picked seller-cheap (0.0002 SOL): cheapest for the fixture list
-[buyer]  round 1: DEPOSITED 0.0002 SOL → seller-cheap
-seller-cheap   DELIVERED round=1 {"service":"txline-fixtures","count":…}
-[buyer]  round 1: RELEASED to seller-cheap — https://explorer.solana.com/tx/…?cluster=devnet
+[buyer]  round 1: WANT bounty-brief autonomous path to earn at least 100 USD without personal participation
+seller-cheap    BID round=1 price=0.0002 by=seller-cheap note=fast due diligence
+seller-premium  BID round=1 price=0.0005 by=seller-premium note=deeper scoring
+[buyer]  picked seller-cheap (0.0002 SOL): best value inside budget
+[buyer]  round 1: DEPOSITED 0.0002 SOL -> seller-cheap
+seller-cheap   DELIVERED round=1 {"service":"bounty-brief","ranked":[...],"guardrails":[...]}
+[buyer]  round 1: RELEASED to seller-cheap - https://explorer.solana.com/tx/... ?cluster=devnet
 ```
 
 ## Knobs (`.env` or the session options)
 
 | Var | Effect |
 |-----|--------|
-| `BUYER_ARG` | the txline request (`fixtures` default; `edge <fixtureId>` for the headline read) |
+| `BUYER_ARG` | the earning constraint to brief; defaults to "autonomous path to earn at least 100 USD without personal participation" |
+| `BUYER_SERVICE` | the service to buy; defaults to `bounty-brief` |
 | `LLM_PROVIDER=venice\|openai` | flip the whole market to another provider — no code change (Venice is the kit default) |
 | `TRACE=1` | log the `coral_*` calls + Explorer links for the escrow PDA, deposit, and release |
 | `BUYER_MAX_SOL` | the budget cap each round |

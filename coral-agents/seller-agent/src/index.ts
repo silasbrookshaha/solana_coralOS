@@ -1,11 +1,11 @@
 /**
- * TxODDS seller agent for the CoralOS market.
+ * Bounty-brief seller agent for the CoralOS market.
  *
  * Flow:
  *   WANT -> BID -> AWARD -> ESCROW_REQUIRED -> DEPOSITED -> DELIVERED
  *
  * Settlement is arbiter-gated by default. The buyer opens escrow through the arbiter wrapper, then the
- * seller verifies the funded escrow using the vault PDA before delivering the TxODDS read.
+ * seller verifies the funded escrow using the vault PDA before delivering the due-diligence brief.
  */
 import { createHash } from 'node:crypto'
 import type { Program } from '@coral-xyz/anchor'
@@ -33,7 +33,7 @@ let program: Program | null = null
 const escrowProgram = async (): Promise<Program> => (program ??= await makeProgram(RPC))
 
 function boundReference(order: Quote & { round: number }): string {
-  const preimage = `txodds-coral:${order.round}:${order.service}:${order.arg}:${SELLER_WALLET}:${order.priceSol}`
+  const preimage = `bounty-brief-coral:${order.round}:${order.service}:${order.arg}:${SELLER_WALLET}:${order.priceSol}`
   return new PublicKey(createHash('sha256').update(preimage).digest()).toBase58()
 }
 

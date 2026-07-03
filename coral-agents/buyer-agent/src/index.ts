@@ -31,14 +31,15 @@ import { payoutMatches } from './guard.js'
 
 const RPC = process.env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
 const BUDGET = Number(process.env.BUYER_MAX_SOL ?? '0.001')
-const SERVICE = process.env.BUYER_SERVICE ?? 'txline'
+const SERVICE = process.env.BUYER_SERVICE ?? 'bounty-brief'
 // Rotate through several args so each round trades a *different* thing (BUYER_ARGS=csv of fixture ids,
 // else the single BUYER_ARG). This is what stops the market looking like the same round on a loop.
-const ARGS = (process.env.BUYER_ARGS || process.env.BUYER_ARG || 'SOL-USDC').split(',').map((s) => s.trim()).filter(Boolean)
+const ARGS = (process.env.BUYER_ARGS || process.env.BUYER_ARG || 'autonomous path to earn at least 100 USD without personal participation')
+  .split(',').map((s) => s.trim()).filter(Boolean)
 const ARG = ARGS[0]
 const BID_WINDOW_MS = Number(process.env.BID_WINDOW_MS ?? '5000')
 const CYCLE_MS = Number(process.env.CYCLE_INTERVAL_MS ?? '30000')
-const SELLERS = (process.env.MARKET_SELLERS ?? 'seller-worldcup,seller-fast,seller-premium')
+const SELLERS = (process.env.MARKET_SELLERS ?? 'seller-cheap,seller-premium')
   .split(',').map((s) => s.trim()).filter(Boolean)
 // F3: the payout wallet the buyer expects (personas share one in the demo). If set, the buyer refuses
 // to deposit to an ESCROW_REQUIRED whose seller= pubkey differs - binding the award to the payout.
@@ -97,11 +98,6 @@ await startCoralAgent({ agentName: process.env.AGENT_NAME ?? 'buyer-agent' }, as
     try { await ctx.waitForAgent(s, 8000) } catch { /* seller may already be present */ }
   }
   const thread = await ctx.createThread('market', SELLERS)
-  const program = await makeProgram(buyer, RPC)
-  if (arbiter) {
-    await ensureArbiterConfig(buyer, arbiter.publicKey, RPC)
-    await ensureArbiterFunded(buyer, arbiter.publicKey, RPC)
-  }
   let round = 0
 
   while (true) {
@@ -142,10 +138,13 @@ await startCoralAgent({ agentName: process.env.AGENT_NAME ?? 'buyer-agent' }, as
       let vault: PublicKey | undefined
       if (requestedSettlement === 'arbiter') {
         if (!arbiter) throw new Error('ARBITER_KEYPAIR_B58 is required for SETTLEMENT_MODE=arbiter')
+        await ensureArbiterConfig(buyer, arbiter.publicKey, RPC)
+        await ensureArbiterFunded(buyer, arbiter.publicKey, RPC)
         const opened = await openArbitrated(makeArbiter(buyer, RPC), buyer, seller, reference, terms.amountSol, terms.deadlineSecs)
         depositSig = opened.sig
         vault = opened.vault
       } else {
+        const program = await makeProgram(buyer, RPC)
         depositSig = await deposit(program, buyer, seller, reference, terms.amountSol, terms.deadlineSecs)
       }
       console.error(`[buyer] round ${round}: DEPOSITED ${terms.amountSol} SOL -> ${winner.by}`)
@@ -180,7 +179,7 @@ await startCoralAgent({ agentName: process.env.AGENT_NAME ?? 'buyer-agent' }, as
       if (delivered) {
         const releaseSig = requestedSettlement === 'arbiter' && arbiter
           ? await arbitrateRelease(makeArbiter(arbiter, RPC), arbiter, seller, reference)
-          : await release(program, buyer, seller, reference)
+          : await release(await makeProgram(buyer, RPC), buyer, seller, reference)
         const releaseVerb = requestedSettlement === 'arbiter' ? 'ARBITER_RELEASED' : 'RELEASED'
         console.error(`[buyer] round ${round}: ${releaseVerb} to ${winner.by} - ${expl('tx', releaseSig)}`)
         await ctx.send(`${releaseVerb} round=${round} sig=${releaseSig} settlement=${requestedSettlement}`, thread, [winner.by])

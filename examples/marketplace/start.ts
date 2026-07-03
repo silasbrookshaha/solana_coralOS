@@ -37,8 +37,8 @@ function loadEnv(): Record<string, string> {
 const str = (value: string) => ({ type: 'string', value })
 const f64 = (value: number) => ({ type: 'f64', value })
 
-const agent = (name: string, options: Record<string, unknown>) => ({
-  id: { name, version: '0.1.0', registrySourceId: { type: 'local' } },
+const agent = (name: string, options: Record<string, unknown>, idName = name) => ({
+  id: { name: idName, version: '0.1.0', registrySourceId: { type: 'local' } },
   name,
   provider: { type: 'local', runtime: 'docker' },
   options,
@@ -48,8 +48,12 @@ async function main() {
   const env = loadEnv()
   const wallet = env.WALLET
   const keypair = env.BUYER_KEYPAIR_B58
+  const arbiter = env.ARBITER_KEYPAIR_B58
   if (!wallet || !keypair) {
-    throw new Error('WALLET and BUYER_KEYPAIR_B58 must be set in .env — run `node scripts/setup.js`')
+    throw new Error('WALLET and BUYER_KEYPAIR_B58 must be set in .env - run `node scripts/setup.js`')
+  }
+  if (!arbiter) {
+    throw new Error('ARBITER_KEYPAIR_B58 must be set in .env - run `node scripts/setup.js`')
   }
   const rpc = env.SOLANA_RPC_URL ?? 'https://api.devnet.solana.com'
   const trace = env.TRACE ?? ''
@@ -63,28 +67,27 @@ async function main() {
   if (env.LLM_MODEL) llmOpts.LLM_MODEL = str(env.LLM_MODEL)
   if (trace) llmOpts.TRACE = str(trace)
 
-  // The market sells one verified product: a TxODDS World Cup read (the `txline` service). Generic
-  // services (coingecko/jupiter/news) are no longer routed — the seller image only delivers txline —
-  // so the market needs a free devnet TxLINE token to have anything to sell.
-  const txlineKey = env.TXLINE_API_KEY
-  if (!txlineKey) {
-    throw new Error(
-      'TXLINE_API_KEY missing — this market sells verified TxODDS World Cup data. Mint a free devnet ' +
-      'token with `npm run mint` in examples/txodds, then re-run `npm start`.',
+  const marketService = env.BUYER_SERVICE ?? 'bounty-brief'
+
+  // Every seller shares the same receive wallet and bounty-brief implementation; they compete on
+  // persona/floor (set per coral-agent.toml), not payment rails. The buyer awards best value and
+  // settles the winner via escrow.
+  const sellerProfile = (name: string) => name.includes('premium')
+    ? { floor: env.PREMIUM_SELLER_FLOOR_SOL ?? '0.0008', persona: 'a premium bounty-risk analyst who charges more for careful payout and autonomy checks' }
+    : { floor: env.CHEAP_SELLER_FLOOR_SOL ?? '0.0003', persona: 'a fast bounty scout who sells concise autonomous-work triage at a low price' }
+
+  const seller = (name: string) => {
+    const profile = sellerProfile(name)
+    return (
+    agent(name, {
+      SELLER_WALLET: str(wallet), SOLANA_RPC_URL: str(rpc), AGENT_NAME: str(name),
+      SERVICES: str(marketService), FLOOR_SOL: f64(Number(profile.floor)), PERSONA: str(profile.persona),
+      ...llmOpts,
+    }, 'seller-agent')
     )
   }
 
-  // Every seller is a txline seller sharing the receive wallet + token; they compete on persona/floor
-  // (set per coral-agent.toml), not code. The buyer awards best value and settles the winner via escrow.
-  const seller = (name: string) =>
-    agent(name, {
-      SELLER_WALLET: str(wallet), SOLANA_RPC_URL: str(rpc), AGENT_NAME: str(name),
-      SERVICES: str('txline'), TXLINE_API_KEY: str(txlineKey),
-      ...(env.TXLINE_BASE_URL ? { TXLINE_BASE_URL: str(env.TXLINE_BASE_URL) } : {}),
-      ...llmOpts,
-    })
-
-  const sellers = ['seller-worldcup', 'seller-cheap', 'seller-premium']
+  const sellers = ['seller-cheap', 'seller-premium']
 
   // Optional broker swarm (ENABLE_BROKER=1, see coral-agents/broker/README.md): the buyer buys from a
   // broker, which resells from the real sellers. Needs a funded broker wallet + seller receive wallets —
@@ -106,15 +109,15 @@ async function main() {
   const buyerSellers = brokerReady ? ['broker'] : sellers
   const buyerExpectedWallet = brokerReady ? env.BROKER_WALLET : wallet
 
-  // The buyer shops for the txline read. `fixtures` always returns data; override with BUYER_ARG (e.g.
-  // `edge <fixtureId>` for the headline read) or BUYER_ARGS (a csv rotated one per round) once you have
-  // a live fixture id.
-  const buyerService = env.BUYER_SERVICE ?? 'txline'
-  const buyerArg = env.BUYER_ARG ?? 'fixtures'
+  // The buyer shops for an autonomous earning due-diligence brief. Override BUYER_ARG / BUYER_ARGS to
+  // test different earning constraints.
+  const buyerService = marketService
+  const buyerArg = env.BUYER_ARG ?? 'autonomous path to earn at least 100 USD without personal participation'
   const buyerArgs = env.BUYER_ARGS ?? ''
 
   const buyerOpts: Record<string, unknown> = {
     BUYER_KEYPAIR_B58: str(keypair),
+    ARBITER_KEYPAIR_B58: str(arbiter),
     AGENT_NAME: str('buyer-agent'),
     SOLANA_RPC_URL: str(rpc),
     // F3: the expected seller payout wallet — the buyer binds the escrow seller= to it (broker if enabled).
@@ -136,7 +139,6 @@ async function main() {
       agentGraphRequest: {
         agents: [
           agent('buyer-agent', buyerOpts),
-          seller('seller-worldcup'),
           seller('seller-cheap'),
           seller('seller-premium'),
           ...brokerAgents,
